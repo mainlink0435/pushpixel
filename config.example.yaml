@@ -1,0 +1,58 @@
+# PushPixel Configuration
+# Copy this file to config.yaml and fill in your values.
+
+# List of local directories to monitor for media files.
+directories:
+  - /path/to/photos
+  - /path/to/videos
+
+# File extensions to watch for (case-insensitive).
+file_extensions:
+  - .jpg
+  - .jpeg
+  - .png
+  - .webp
+  - .mp4
+  - .mov
+
+# Path to the SQLite database file for upload state tracking.
+db_path: pushpixel.db
+
+# Polling configuration — how often to scan directories for new/modified files.
+polling:
+  interval: 5m  # duration (e.g., 1m, 5m, 30m)
+
+# Retry configuration for transient upload failures.
+retry:
+  max_attempts: 5       # maximum retries per file before marking failed
+  base_delay: 1s        # initial backoff duration
+  max_delay: 30s        # maximum backoff duration
+  jitter: true          # add random jitter to avoid thundering herd
+
+# Upload concurrency and batching.
+upload:
+  max_concurrent: 2      # maximum parallel uploads (bytes phase)
+  batch_size: 50         # items per batchCreate call (max 50, API limit)
+
+# Behaviour when Google Photos storage is full.
+storage_full:
+  backoff: 4h  # how long to pause before retrying after a quota-exceeded error
+
+# Logging configuration.
+logging:
+  level: info         # debug, info, warn, error
+  file_path: pushpixel.log
+  max_size_mb: 10     # rotate after 10 MB
+  max_backups: 3      # keep 3 rotated files
+  max_age_days: 30    # delete rotated files older than 30 days
+
+# Local web interface for monitoring and manual actions.
+webui:
+  host: 127.0.0.1  # bind address
+  port: 8080       # listen port
+
+# OAuth 2.0 credentials (from Google Cloud Console).
+auth:
+  client_id: "your-oauth-client-id"
+  client_secret: "your-oauth-client-secret"
+  token_dir: "."  # directory for storing encrypted OAuth tokens

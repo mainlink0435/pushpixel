@@ -1,0 +1,9 @@
+.git/
+.gitignore
+.gitattributes
+docs/
+internal/*/*_test.go
+*.md
+.DS_Store
+Thumbs.db
+pushpixel.exe

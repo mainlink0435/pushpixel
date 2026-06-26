@@ -1,0 +1,22 @@
+# Binaries
+/pushpixel
+/pushpixel.exe
+
+# Local state files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+token.enc
+*.log
+
+# Config with secrets
+/config.yaml
+
+# OS artifacts
+Thumbs.db
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

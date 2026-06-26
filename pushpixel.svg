@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="gradBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4285F4" />
+      <stop offset="100%" stop-color="#1A73E8" />
+    </linearGradient>
+    <linearGradient id="gradRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EA4335" />
+      <stop offset="100%" stop-color="#D93025" />
+    </linearGradient>
+    <linearGradient id="gradYellow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBC05" />
+      <stop offset="100%" stop-color="#F29900" />
+    </linearGradient>
+    <linearGradient id="gradGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34A853" />
+      <stop offset="100%" stop-color="#1E8E3E" />
+    </linearGradient>
+    <linearGradient id="gradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#202124" />
+      <stop offset="100%" stop-color="#3C4043" />
+    </linearGradient>
+    
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#000000" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <rect width="500" height="500" fill="#F8F9FA" />
+
+  <g stroke="#E8EAED" stroke-width="2" fill="none">
+    <path d="M 50 450 Q 150 250 250 250 T 450 50" />
+    <path d="M 100 500 Q 250 350 250 250 T 400 0" />
+    <circle cx="250" cy="250" r="120" stroke-dasharray="10 15" stroke-width="4" />
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M 180 350 L 180 150 A 20 20 0 0 1 200 130 L 250 130 A 70 70 0 0 1 320 200 A 70 70 0 0 1 250 270 L 220 270 L 220 350 Z" fill="url(#gradBlue)" />
+    <path d="M 220 170 L 250 170 A 30 30 0 0 1 280 200 A 30 30 0 0 1 250 230 L 220 230 Z" fill="#F8F9FA" />
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="290" y="110" width="30" height="30" rx="6" fill="url(#gradRed)" transform="rotate(15 305 125)" />
+    <rect x="330" y="70" width="20" height="20" rx="4" fill="url(#gradRed)" transform="rotate(25 340 80)" />
+    
+    <rect x="330" y="160" width="35" height="35" rx="8" fill="url(#gradYellow)" transform="rotate(-10 347.5 177.5)" />
+    <rect x="380" y="130" width="15" height="15" rx="3" fill="url(#gradYellow)" transform="rotate(-20 387.5 137.5)" />
+    
+    <rect x="300" y="240" width="25" height="25" rx="5" fill="url(#gradGreen)" transform="rotate(5 312.5 252.5)" />
+    <rect x="350" y="220" width="18" height="18" rx="4" fill="url(#gradGreen)" transform="rotate(45 359 229)" />
+    
+    <rect x="130" y="280" width="20" height="20" rx="4" fill="url(#gradBlue)" />
+    <rect x="145" y="320" width="15" height="15" rx="3" fill="url(#gradBlue)" />
+  </g>
+  
+  <text x="250" y="435" font-family="'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="36" font-weight="800" fill="url(#gradDark)" text-anchor="middle" letter-spacing="2">PUSHPIXEL</text>
+</svg>
