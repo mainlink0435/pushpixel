@@ -51,6 +51,8 @@ func New(a *auth.Auth, cfg config.WebUIConfig, database *db.DB) *Server {
 	return s
 }
 
+const logoHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" style="display:block;margin:0 auto 16px auto;max-width:200px"><defs><linearGradient id="gb" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4285F4"/><stop offset="100%" stop-color="#1A73E8"/></linearGradient><linearGradient id="gr" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#EA4335"/><stop offset="100%" stop-color="#D93025"/></linearGradient><linearGradient id="gy" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FBBC05"/><stop offset="100%" stop-color="#F29900"/></linearGradient><linearGradient id="gg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#34A853"/><stop offset="100%" stop-color="#1E8E3E"/></linearGradient><linearGradient id="gd" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#202124"/><stop offset="100%" stop-color="#3C4043"/></linearGradient><filter id="s"><feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#000" flood-opacity=".15"/></filter></defs><g stroke="#E8EAED" stroke-width="2" fill="none"><path d="M 50 450 Q 150 250 250 250 T 450 50"/><path d="M 100 500 Q 250 350 250 250 T 400 0"/><circle cx="250" cy="250" r="120" stroke-dasharray="10 15" stroke-width="4"/></g><g filter="url(#s)"><path d="M 180 350 L 180 150 A 20 20 0 0 1 200 130 L 250 130 A 70 70 0 0 1 320 200 A 70 70 0 0 1 250 270 L 220 270 L 220 350 Z" fill="url(#gb)"/><path d="M 220 170 L 250 170 A 30 30 0 0 1 280 200 A 30 30 0 0 1 250 230 L 220 230 Z" fill="#F8F9FA"/></g><g filter="url(#s)"><rect x="290" y="110" width="30" height="30" rx="6" fill="url(#gr)" transform="rotate(15 305 125)"/><rect x="330" y="70" width="20" height="20" rx="4" fill="url(#gr)" transform="rotate(25 340 80)"/><rect x="330" y="160" width="35" height="35" rx="8" fill="url(#gy)" transform="rotate(-10 347.5 177.5)"/><rect x="380" y="130" width="15" height="15" rx="3" fill="url(#gy)" transform="rotate(-20 387.5 137.5)"/><rect x="300" y="240" width="25" height="25" rx="5" fill="url(#gg)" transform="rotate(5 312.5 252.5)"/><rect x="350" y="220" width="18" height="18" rx="4" fill="url(#gg)" transform="rotate(45 359 229)"/><rect x="130" y="280" width="20" height="20" rx="4" fill="url(#gb)"/><rect x="145" y="320" width="15" height="15" rx="3" fill="url(#gb)"/></g><text x="250" y="435" font-family="'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="36" font-weight="800" fill="url(#gd)" text-anchor="middle" letter-spacing="2">PUSHPIXEL</text></svg>`
+
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 	slog.Info("webui listening", "address", addr)
@@ -61,9 +63,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	if s.auth.IsAuthenticated() {
-		fmt.Fprint(w, dashboardHTMLAuthenticated)
+		fmt.Fprint(w, logoHTML, dashboardHTMLAuthenticated)
 	} else {
-		fmt.Fprint(w, dashboardHTMLNotAuthed)
+		fmt.Fprint(w, logoHTML, dashboardHTMLNotAuthed)
 	}
 }
 
@@ -205,7 +207,6 @@ h1 { color: #1a1a1a; }
 </style>
 </head>
 <body>
-<h1>PushPixel</h1>
 <div class="card">
 <p class="status">Not connected to Google Photos.</p>
 <a class="btn" href="/oauth/authorize">Connect to Google Photos</a>
@@ -239,7 +240,6 @@ h1 { color: #1a1a1a; }
 </style>
 </head>
 <body>
-<h1>PushPixel</h1>
 <div class="card">
 <p class="status-ok" id="auth-status">Connected to Google Photos</p>
 <div class="stat"><span>Total tracked</span><span id="total">0</span></div>
