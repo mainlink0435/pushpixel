@@ -26,6 +26,7 @@ type TrackedFile struct {
 	Status           Status    `json:"status"`
 	GoogleMediaID    *string   `json:"google_media_id,omitempty"`
 	ErrorMessage     *string   `json:"error_message,omitempty"`
+	RetryCount       int       `json:"retry_count"`
 	UploadedAt       *time.Time `json:"uploaded_at,omitempty"`
 	LastCheckedAt    time.Time `json:"last_checked_at"`
 	CreatedAt        time.Time `json:"created_at"`
@@ -65,6 +66,7 @@ func (d *DB) migrate() error {
 			CHECK(status IN ('pending', 'uploading', 'success', 'failed')),
 		google_media_id TEXT,
 		error_message   TEXT,
+		retry_count     INTEGER NOT NULL DEFAULT 0,
 		uploaded_at     TEXT,
 		last_checked_at TEXT NOT NULL DEFAULT (datetime('now')),
 		created_at      TEXT NOT NULL DEFAULT (datetime('now'))
@@ -76,8 +78,17 @@ func (d *DB) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_tracked_files_google_media_id
 		ON tracked_files(google_media_id);`
 
-	_, err := d.db.Exec(schema)
-	return err
+	if _, err := d.db.Exec(schema); err != nil {
+		return err
+	}
+
+	var colCount int
+	err := d.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('tracked_files') WHERE name = 'retry_count'`).Scan(&colCount)
+	if err == nil && colCount == 0 {
+		d.db.Exec(`ALTER TABLE tracked_files ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`)
+	}
+
+	return nil
 }
 
 func (d *DB) UpsertFile(path string, fileSize int64, modTime time.Time) (*TrackedFile, error) {
@@ -107,7 +118,7 @@ func (d *DB) UpsertFile(path string, fileSize int64, modTime time.Time) (*Tracke
 func (d *DB) GetByID(id int64) (*TrackedFile, error) {
 	row := d.db.QueryRow(`
 		SELECT id, absolute_path, file_size, mod_time, status,
-			google_media_id, error_message, uploaded_at, last_checked_at, created_at
+			google_media_id, error_message, retry_count, uploaded_at, last_checked_at, created_at
 		FROM tracked_files WHERE id = ?`, id)
 
 	return d.scanFile(row)
@@ -116,7 +127,7 @@ func (d *DB) GetByID(id int64) (*TrackedFile, error) {
 func (d *DB) GetByPath(path string) (*TrackedFile, error) {
 	row := d.db.QueryRow(`
 		SELECT id, absolute_path, file_size, mod_time, status,
-			google_media_id, error_message, uploaded_at, last_checked_at, created_at
+			google_media_id, error_message, retry_count, uploaded_at, last_checked_at, created_at
 		FROM tracked_files WHERE absolute_path = ?`, path)
 
 	return d.scanFile(row)
@@ -143,7 +154,7 @@ func (d *DB) CountByStatus(status Status) (int, error) {
 func (d *DB) ListByStatus(status Status) ([]*TrackedFile, error) {
 	rows, err := d.db.Query(`
 		SELECT id, absolute_path, file_size, mod_time, status,
-			google_media_id, error_message, uploaded_at, last_checked_at, created_at
+			google_media_id, error_message, retry_count, uploaded_at, last_checked_at, created_at
 		FROM tracked_files WHERE status = ?
 		ORDER BY id`, string(status))
 	if err != nil {
@@ -160,6 +171,16 @@ func (d *DB) ListByStatus(status Status) ([]*TrackedFile, error) {
 		files = append(files, f)
 	}
 	return files, rows.Err()
+}
+
+func (d *DB) IncrementRetryCount(id int64) error {
+	_, err := d.db.Exec(`UPDATE tracked_files SET retry_count = retry_count + 1 WHERE id = ?`, id)
+	return err
+}
+
+func (d *DB) ResetRetryCount(id int64) error {
+	_, err := d.db.Exec(`UPDATE tracked_files SET retry_count = 0 WHERE id = ?`, id)
+	return err
 }
 
 func (d *DB) UpdateStatus(id int64, status Status, googleMediaID, errorMessage *string) error {
@@ -202,7 +223,7 @@ func (d *DB) scanFile(row interface{}) (*TrackedFile, error) {
 	scan := func(r interface{ Scan(dest ...interface{}) error }) error {
 		return r.Scan(
 			&tf.ID, &tf.AbsolutePath, &tf.FileSize, &modTimeStr,
-			&tf.Status, &googleMediaID, &errorMessage,
+			&tf.Status, &googleMediaID, &errorMessage, &tf.RetryCount,
 			&uploadedAtStr, &lastCheckedStr, &createdAtStr,
 		)
 	}

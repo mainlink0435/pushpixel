@@ -45,6 +45,7 @@ func New(a *auth.Auth, cfg config.WebUIConfig, database *db.DB) *Server {
 	s.mux.HandleFunc("/oauth/callback", s.handleOAuthCallback)
 	s.mux.HandleFunc("/api/status", s.handleAPIStatus)
 	s.mux.HandleFunc("/api/retry-failed", s.handleRetryFailed)
+	s.mux.HandleFunc("/api/failed", s.handleFailedFiles)
 	s.mux.HandleFunc("/health", s.handleHealth)
 
 	return s
@@ -128,6 +129,10 @@ func (s *Server) handleRetryFailed(w http.ResponseWriter, r *http.Request) {
 
 	count := 0
 	for _, f := range failed {
+		if err := s.database.ResetRetryCount(f.ID); err != nil {
+			slog.Error("reset retry count", "id", f.ID, "error", err)
+			continue
+		}
 		if err := s.database.UpdateStatus(f.ID, db.StatusPending, nil, nil); err != nil {
 			slog.Error("reset failed file", "id", f.ID, "error", err)
 			continue
@@ -140,6 +145,37 @@ func (s *Server) handleRetryFailed(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"reset": count,
 	})
+}
+
+func (s *Server) handleFailedFiles(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	failed, err := s.database.ListByStatus(db.StatusFailed)
+	if err != nil {
+		slog.Error("list failed", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	type failedFile struct {
+		Path  string `json:"path"`
+		Error string `json:"error"`
+	}
+
+	files := make([]failedFile, 0, len(failed))
+	for _, f := range failed {
+		errMsg := ""
+		if f.ErrorMessage != nil {
+			errMsg = *f.ErrorMessage
+		}
+		files = append(files, failedFile{Path: f.AbsolutePath, Error: errMsg})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"files": files})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -196,6 +232,10 @@ h1 { color: #1a1a1a; }
 .btn-warn { background: #ea4335; }
 .btn-warn:hover { background: #c5221f; }
 .hidden { display: none; }
+.failed-list { margin-top: 8px; font-size: 13px; color: #333; }
+.failed-item { padding: 4px 0; word-break: break-all; }
+.failed-item .err { color: #ea4335; }
+.toggle-link { color: #1a73e8; cursor: pointer; font-size: 13px; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -205,7 +245,8 @@ h1 { color: #1a1a1a; }
 <div class="stat"><span>Total tracked</span><span id="total">0</span></div>
 <div class="stat"><span>Uploaded</span><span id="uploaded">0</span></div>
 <div class="stat"><span>Remaining</span><span id="remaining">0</span></div>
-<div class="stat"><span>Failed</span><span id="failed">0</span></div>
+<div class="stat"><span>Failed</span><span id="failed">0</span> <span id="failed-toggle" class="toggle-link hidden" onclick="toggleFailed()">Show</span></div>
+<div id="failed-details" class="hidden failed-list"></div>
 <div class="stat"><span>Status</span><span id="storage-status">Active</span></div>
 <div id="retry-section" class="hidden" style="margin-top: 16px;">
 <button class="btn btn-warn" onclick="retryFailed()">Retry Failed Files</button>
@@ -213,6 +254,7 @@ h1 { color: #1a1a1a; }
 </div>
 </div>
 <script>
+var failedVisible = false;
 async function refreshStatus() {
   try {
     const r = await fetch('/api/status');
@@ -222,6 +264,9 @@ async function refreshStatus() {
     document.getElementById('remaining').textContent = d.remaining;
     document.getElementById('failed').textContent = d.failed;
     document.getElementById('storage-status').textContent = d.storage_full ? 'Storage Full' : 'Active';
+    var ft = document.getElementById('failed-toggle');
+    ft.classList.toggle('hidden', d.failed === 0);
+    ft.textContent = failedVisible ? 'Hide' : 'Show (' + d.failed + ')';
     document.getElementById('retry-section').classList.toggle('hidden', d.failed === 0);
   } catch(e) { console.error(e); }
 }
@@ -232,6 +277,30 @@ async function retryFailed() {
     document.getElementById('retry-result').textContent = 'Reset ' + d.reset + ' file(s) — next scan will retry';
     refreshStatus();
   } catch(e) { console.error(e); }
+}
+async function toggleFailed() {
+  failedVisible = !failedVisible;
+  var el = document.getElementById('failed-details');
+  var ft = document.getElementById('failed-toggle');
+  if (failedVisible) {
+    ft.textContent = 'Hide';
+    el.classList.remove('hidden');
+    try {
+      const r = await fetch('/api/failed');
+      const d = await r.json();
+      el.innerHTML = d.files.map(function(f) {
+        return '<div class="failed-item">' + escapeHtml(f.path) + ' <span class="err">— ' + escapeHtml(f.error) + '</span></div>';
+      }).join('');
+    } catch(e) { el.innerHTML = '<div class="failed-item">Failed to load details</div>'; }
+  } else {
+    ft.textContent = 'Show (' + document.getElementById('failed').textContent + ')';
+    el.classList.add('hidden');
+  }
+}
+function escapeHtml(s) {
+  var div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
 }
 setInterval(refreshStatus, 5000);
 refreshStatus();

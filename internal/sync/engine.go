@@ -131,6 +131,16 @@ func (e *Engine) handleFile(ctx context.Context, path string) error {
 		return nil
 	}
 
+	if dbErr == nil && existing.RetryCount >= e.cfg.Retry.MaxAttempts &&
+		(existing.Status == db.StatusUploading || existing.Status == db.StatusPending) {
+		slog.Warn("max auto-retries reached, permanently failed", "path", path, "retries", existing.RetryCount)
+		e.dbMu.Lock()
+		errMsg := "max retries exceeded"
+		_ = e.database.UpdateStatus(existing.ID, db.StatusFailed, nil, &errMsg)
+		e.dbMu.Unlock()
+		return nil
+	}
+
 	e.dbMu.Lock()
 	record, err := e.database.UpsertFile(path, info.Size(), info.ModTime())
 	e.dbMu.Unlock()
@@ -188,6 +198,7 @@ func (e *Engine) uploadWorker(ctx context.Context, wg *sync.WaitGroup) {
 				} else {
 					slog.Warn("byte upload transient error, will retry", "path", job.Path, "error", err)
 					e.dbMu.Lock()
+					_ = e.database.IncrementRetryCount(job.DBFileID)
 					_ = e.database.UpdateStatus(job.DBFileID, db.StatusPending, nil, nil)
 					e.dbMu.Unlock()
 				}
@@ -244,6 +255,9 @@ func (e *Engine) createWorker(ctx context.Context, wg *sync.WaitGroup) {
 				newStatus = db.StatusFailed
 			}
 			for _, job := range pendingJobs {
+				if !isPermanent {
+					_ = e.database.IncrementRetryCount(job.DBFileID)
+				}
 				_ = e.database.UpdateStatus(job.DBFileID, newStatus, nil, &errStr)
 			}
 			e.dbMu.Unlock()

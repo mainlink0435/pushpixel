@@ -95,6 +95,25 @@ func writeTestFile(t *testing.T, dir string) string {
 	return path
 }
 
+func awaitStatus(t *testing.T, d *db.DB, path string, target db.Status) *db.TrackedFile {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		record, err := d.GetByPath(path)
+		if err == nil && record.Status == target {
+			return record
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				t.Fatalf("timed out waiting for %s, last error: %v", target, err)
+			}
+			record, _ := d.GetByPath(path)
+			t.Fatalf("timed out waiting for %s, got status=%s", target, record.Status)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func TestEngine_SuccessUpload(t *testing.T) {
 	e, database, fileCh, _, _ := setupEngineTest(t, 5)
 	dir := t.TempDir()
@@ -106,14 +125,10 @@ func TestEngine_SuccessUpload(t *testing.T) {
 	go e.Run(ctx, fileCh)
 	fileCh <- path
 
-	time.Sleep(500 * time.Millisecond)
+	record := awaitStatus(t, database, path, db.StatusSuccess)
 
-	record, err := database.GetByPath(path)
-	if err != nil {
-		t.Fatalf("get by path: %v", err)
-	}
-	if record.Status != db.StatusSuccess {
-		t.Errorf("expected success, got %s", record.Status)
+	if record.GoogleMediaID == nil || *record.GoogleMediaID == "" {
+		t.Error("expected google media ID")
 	}
 }
 
@@ -132,15 +147,7 @@ func TestEngine_TransientUploadFailure(t *testing.T) {
 	go e.Run(ctx, fileCh)
 	fileCh <- path
 
-	time.Sleep(500 * time.Millisecond)
-
-	record, err := database.GetByPath(path)
-	if err != nil {
-		t.Fatalf("get by path: %v", err)
-	}
-	if record.Status != db.StatusPending {
-		t.Errorf("expected pending on transient error, got %s", record.Status)
-	}
+	awaitStatus(t, database, path, db.StatusPending)
 }
 
 func TestEngine_PermanentUploadFailure(t *testing.T) {
@@ -158,15 +165,8 @@ func TestEngine_PermanentUploadFailure(t *testing.T) {
 	go e.Run(ctx, fileCh)
 	fileCh <- path
 
-	time.Sleep(500 * time.Millisecond)
+	record := awaitStatus(t, database, path, db.StatusFailed)
 
-	record, err := database.GetByPath(path)
-	if err != nil {
-		t.Fatalf("get by path: %v", err)
-	}
-	if record.Status != db.StatusFailed {
-		t.Errorf("expected failed on permanent error, got %s", record.Status)
-	}
 	if record.ErrorMessage == nil || *record.ErrorMessage != "file too large" {
 		t.Errorf("expected error message 'file too large', got %v", record.ErrorMessage)
 	}
@@ -190,15 +190,7 @@ func TestEngine_BatchCreateTransientFailure(t *testing.T) {
 	go e.Run(ctx, fileCh)
 	fileCh <- path
 
-	time.Sleep(500 * time.Millisecond)
-
-	record, err := database.GetByPath(path)
-	if err != nil {
-		t.Fatalf("get by path: %v", err)
-	}
-	if record.Status != db.StatusPending {
-		t.Errorf("expected pending on transient batch error, got %s", record.Status)
-	}
+	awaitStatus(t, database, path, db.StatusPending)
 }
 
 func TestEngine_BatchCreatePermanentFailure(t *testing.T) {
@@ -219,14 +211,10 @@ func TestEngine_BatchCreatePermanentFailure(t *testing.T) {
 	go e.Run(ctx, fileCh)
 	fileCh <- path
 
-	time.Sleep(500 * time.Millisecond)
+	record := awaitStatus(t, database, path, db.StatusFailed)
 
-	record, err := database.GetByPath(path)
-	if err != nil {
-		t.Fatalf("get by path: %v", err)
-	}
-	if record.Status != db.StatusFailed {
-		t.Errorf("expected failed on permanent batch error, got %s", record.Status)
+	if record.ErrorMessage == nil || *record.ErrorMessage != "invalid request" {
+		t.Errorf("expected error message 'invalid request', got %v", record.ErrorMessage)
 	}
 }
 
@@ -290,15 +278,7 @@ func TestEngine_ResumeAfterStorageFull(t *testing.T) {
 	p2 := writeTestFile(t, dir2)
 	fileCh <- p2
 
-	time.Sleep(800 * time.Millisecond)
-
-	record, err := database.GetByPath(p2)
-	if err != nil {
-		t.Fatalf("get by path: %v", err)
-	}
-	if record.Status != db.StatusSuccess {
-		t.Errorf("expected success after resume, got %s", record.Status)
-	}
+	awaitStatus(t, database, p2, db.StatusSuccess)
 }
 
 func TestEngine_ContextCancellation(t *testing.T) {
@@ -365,17 +345,8 @@ func TestEngine_MultipleFiles(t *testing.T) {
 		fileCh <- p
 	}
 
-	time.Sleep(800 * time.Millisecond)
-
 	for _, path := range paths {
-		record, err := database.GetByPath(path)
-		if err != nil {
-			t.Errorf("get %s: %v", path, err)
-			continue
-		}
-		if record.Status != db.StatusSuccess {
-			t.Errorf("expected success for %s, got %s", path, record.Status)
-		}
+		awaitStatus(t, database, path, db.StatusSuccess)
 	}
 }
 

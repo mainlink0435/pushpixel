@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mainLink0435/pushpixel/internal/auth"
 	"github.com/mainLink0435/pushpixel/internal/config"
@@ -130,6 +131,92 @@ func TestAPIStatus(t *testing.T) {
 	}
 	if resp.Authenticated {
 		t.Error("expected not authenticated")
+	}
+}
+
+func TestFailedFiles_Empty(t *testing.T) {
+	s := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/failed", nil)
+	w := httptest.NewRecorder()
+
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Files []interface{} `json:"files"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Files == nil {
+		t.Error("expected empty files array, got nil")
+	}
+}
+
+func TestFailedFiles_WithData(t *testing.T) {
+	s := newTestServer(t)
+
+	dir := t.TempDir()
+	dbase, err := db.Open(filepath.Join(dir, "test-failed.db"))
+	if err != nil {
+		t.Fatalf("db open: %v", err)
+	}
+	defer dbase.Close()
+
+	f, err := dbase.UpsertFile("/path/to/fail.jpg", 100, time.Now())
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	errMsg := "file too large"
+	if err := dbase.UpdateStatus(f.ID, db.StatusFailed, nil, &errMsg); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	s2 := New(s.auth, s.cfg, dbase)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/failed", nil)
+	w := httptest.NewRecorder()
+
+	s2.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Files []struct {
+			Path  string `json:"path"`
+			Error string `json:"error"`
+		} `json:"files"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(resp.Files))
+	}
+	if resp.Files[0].Path != "/path/to/fail.jpg" {
+		t.Errorf("expected path, got %s", resp.Files[0].Path)
+	}
+	if resp.Files[0].Error != "file too large" {
+		t.Errorf("expected error, got %s", resp.Files[0].Error)
+	}
+}
+
+func TestFailedFiles_WrongMethod(t *testing.T) {
+	s := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/failed", nil)
+	w := httptest.NewRecorder()
+
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
 

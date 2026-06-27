@@ -1,6 +1,7 @@
 # Binaries
 /pushpixel
 /pushpixel.exe
+*~
 
 # Local state files
 *.db
