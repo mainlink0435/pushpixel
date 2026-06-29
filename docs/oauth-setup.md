@@ -62,3 +62,4 @@ auth:
 | "access_denied" | Check you enabled the Google Photos Library API |
 | "token not found" after restart | The `token.enc` file stores your session — keep it safe |
 | Test user session expires every 7 days | Re-authenticate, or go through app verification |
+| Redirect went to `localhost` on a remote server | PushPixel uses Desktop OAuth for simplicity, which only auto-approves localhost. Replace `localhost:1978` in the URL bar with your server's hostname — keep `/oauth/callback?...` and all query parameters unchanged. |

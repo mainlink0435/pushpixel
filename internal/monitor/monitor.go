@@ -32,15 +32,13 @@ func New(dirs []string, extensions []string, interval time.Duration, database *d
 	}
 }
 
-func (m *Monitor) Start(ctx context.Context) <-chan string {
-	ch := make(chan string, 100)
-
+func (m *Monitor) Start(ctx context.Context) <-chan struct{} {
+	ch := make(chan struct{}, 1)
 	go m.loop(ctx, ch)
-
 	return ch
 }
 
-func (m *Monitor) loop(ctx context.Context, ch chan<- string) {
+func (m *Monitor) loop(ctx context.Context, ch chan<- struct{}) {
 	defer close(ch)
 
 	m.scan(ch)
@@ -58,23 +56,35 @@ func (m *Monitor) loop(ctx context.Context, ch chan<- string) {
 	}
 }
 
-func (m *Monitor) scan(ch chan<- string) {
+func (m *Monitor) scan(ch chan<- struct{}) {
+	slog.Info("scan started")
+
+	var count int
 	for _, dir := range m.dirs {
-		m.walkDir(dir, ch)
+		count += m.walkDir(dir)
+	}
+
+	total, _ := m.database.TotalCount()
+	slog.Info("scan complete", "files_found", count, "total_tracked", total)
+
+	select {
+	case ch <- struct{}{}:
+	default:
 	}
 }
 
-func (m *Monitor) walkDir(dir string, ch chan<- string) {
+func (m *Monitor) walkDir(dir string) int {
 	info, err := os.Stat(dir)
 	if err != nil {
 		slog.Warn("monitor directory unavailable", "dir", dir, "error", err)
-		return
+		return 0
 	}
 	if !info.IsDir() {
 		slog.Warn("monitor path is not a directory", "dir", dir)
-		return
+		return 0
 	}
 
+	var count int
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -98,7 +108,8 @@ func (m *Monitor) walkDir(dir string, ch chan<- string) {
 
 		existing, err := m.database.GetByPath(path)
 		if err != nil {
-			ch <- path
+			_, _ = m.database.UpsertFile(path, fileInfo.Size(), fileInfo.ModTime())
+			count++
 			return nil
 		}
 
@@ -107,22 +118,26 @@ func (m *Monitor) walkDir(dir string, ch chan<- string) {
 			if existing.FileSize == fileInfo.Size() && sameTime(existing.ModTime, fileInfo.ModTime()) {
 				return nil
 			}
-			ch <- path
+			_, _ = m.database.UpsertFile(path, fileInfo.Size(), fileInfo.ModTime())
+			_ = m.database.UpdateStatus(existing.ID, db.StatusPending, nil, nil)
+			count++
 
 		case db.StatusFailed:
 			if existing.FileSize != fileInfo.Size() || !sameTime(existing.ModTime, fileInfo.ModTime()) {
+				_, _ = m.database.UpsertFile(path, fileInfo.Size(), fileInfo.ModTime())
 				_ = m.database.UpdateStatus(existing.ID, db.StatusPending, nil, nil)
-				ch <- path
+				count++
 			}
 
 		case db.StatusPending, db.StatusUploading:
-			ch <- path
+			return nil
 
 		default:
 		}
 
 		return nil
 	})
+	return count
 }
 
 func (m *Monitor) shouldSkip(d os.DirEntry) bool {

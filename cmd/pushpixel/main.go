@@ -68,7 +68,9 @@ func main() {
 	defer cancel()
 
 	m := monitor.New(cfg.Directories, cfg.FileExtensions, cfg.Polling.Interval, database)
-	fileCh := m.Start(ctx)
+	scanCh := m.Start(ctx)
+
+	fileCh := make(chan string, 100)
 
 	client := a.HTTPClient(context.Background())
 	uploader := sync.NewUploader(client, cfg.Upload)
@@ -78,6 +80,8 @@ func main() {
 			slog.Error("sync engine", "error", err)
 		}
 	}()
+
+	go feedFiles(ctx, database, fileCh, scanCh)
 
 	if a.IsAuthenticated() {
 		slog.Info("authenticated with Google Photos")
@@ -97,4 +101,39 @@ func main() {
 	cancel()
 	log.Close()
 	time.Sleep(500 * time.Millisecond)
+}
+
+func feedFiles(ctx context.Context, database *db.DB, fileCh chan<- string, scanCh <-chan struct{}) {
+	for {
+		pending, err := database.ListPendingLimit(100)
+		if err != nil {
+			slog.Error("feed pending files", "error", err)
+			select {
+			case <-ctx.Done():
+				close(fileCh)
+				return
+			case <-time.After(30 * time.Second):
+			}
+			continue
+		}
+
+		for _, f := range pending {
+			select {
+			case <-ctx.Done():
+				close(fileCh)
+				return
+			case fileCh <- f.AbsolutePath:
+			}
+		}
+
+		if len(pending) == 0 {
+			select {
+			case <-ctx.Done():
+				close(fileCh)
+				return
+			case <-scanCh:
+			case <-time.After(5 * time.Minute):
+			}
+		}
+	}
 }

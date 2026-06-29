@@ -59,11 +59,18 @@ won't be re-uploaded on subsequent scans.
    Everything else defaults automatically for Docker (directories, DB path, logs, tokens).
 3. [Set up OAuth credentials](docs/oauth-setup.md) and fill in the values above
 4. Edit `docker-compose.yml` — change `/path/to/photos:/photos:ro` to point to your media directory
-6. Start the container:
+5. Start the container:
    ```
    docker compose up -d
    ```
-7. Open `http://localhost:1978` — click **Connect to Google Photos**
+6. Open `http://localhost:1978` — click **Connect to Google Photos**
+
+> **Remote server?** PushPixel uses Desktop OAuth for simplicity — no redirect
+> URIs to configure. The trade-off is Google always redirects back to
+> `localhost`. If PushPixel runs on a different machine, when Google redirects
+> to `http://localhost:1978/oauth/callback?...`, manually replace
+> `localhost:1978` in the URL bar with your server's hostname and press Enter.
+> Everything after `/oauth/callback?...` must stay unchanged.
 
 ## Quick Start (Without Docker)
 

@@ -84,7 +84,11 @@ func (e *Engine) Run(ctx context.Context, fileCh <-chan string) error {
 	wg.Add(1)
 	go e.statusUpdater(ctx, &wg)
 
-	go e.storageFullChecker(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.storageFullChecker(ctx)
+	}()
 
 	e.pushStatus()
 

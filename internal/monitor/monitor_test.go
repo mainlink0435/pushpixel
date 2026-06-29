@@ -31,6 +31,16 @@ func writeFile(t *testing.T, dir, name string) string {
 	return path
 }
 
+func awaitScan(ch <-chan struct{}, timeout time.Duration) bool {
+	timer := time.After(timeout)
+	select {
+	case <-ch:
+		return true
+	case <-timer:
+		return false
+	}
+}
+
 func TestNewFileAdded(t *testing.T) {
 	database, dir := setupTest(t)
 	m := New([]string{dir}, []string{".jpg"}, time.Minute, database)
@@ -39,15 +49,15 @@ func TestNewFileAdded(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
+	scanCh := m.Start(ctx)
 
-	select {
-	case path := <-ch:
-		if !strings.HasSuffix(path, "photo.jpg") {
-			t.Errorf("expected photo.jpg, got %s", path)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for file")
+	if !awaitScan(scanCh, time.Second) {
+		t.Fatal("timed out waiting for scan")
+	}
+
+	_, err := database.GetByPath(filepath.Join(dir, "photo.jpg"))
+	if err != nil {
+		t.Errorf("expected file in DB, got %v", err)
 	}
 }
 
@@ -69,13 +79,16 @@ func TestAlreadySuccessFile(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
-	_ = ch
+	scanCh := m.Start(ctx)
+	_ = scanCh
+	_ = awaitScan(scanCh, time.Second)
 
-	time.Sleep(200 * time.Millisecond)
-	paths := drain(ch, 200*time.Millisecond)
-	if len(paths) > 0 {
-		t.Errorf("expected no files for already-success, got %v", paths)
+	updated, err := database.GetByPath(path)
+	if err != nil {
+		t.Fatalf("get by path: %v", err)
+	}
+	if updated.Status != db.StatusSuccess {
+		t.Errorf("expected success, got %s", updated.Status)
 	}
 }
 
@@ -88,12 +101,22 @@ func TestHiddenFilesSkipped(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
+	scanCh := m.Start(ctx)
 
-	paths := drain(ch, time.Second)
-	if len(paths) != 1 {
-		t.Errorf("expected 1 visible file, got %d: %v", len(paths), paths)
+	if !awaitScan(scanCh, time.Second) {
+		t.Fatal("timed out waiting for scan")
 	}
+
+	_, err1 := database.GetByPath(filepath.Join(dir, ".hidden.jpg"))
+	if err1 == nil {
+		t.Error("expected hidden file not in DB")
+	}
+
+	visible, err2 := database.GetByPath(filepath.Join(dir, "visible.jpg"))
+	if err2 != nil {
+		t.Error("expected visible file in DB")
+	}
+	_ = visible
 }
 
 func TestSystemFilesSkipped(t *testing.T) {
@@ -107,11 +130,18 @@ func TestSystemFilesSkipped(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
+	scanCh := m.Start(ctx)
 
-	paths := drain(ch, time.Second)
-	if len(paths) != 1 || !strings.HasSuffix(paths[0], "real.jpg") {
-		t.Errorf("expected real.jpg only, got %v", paths)
+	if !awaitScan(scanCh, time.Second) {
+		t.Fatal("timed out waiting for scan")
+	}
+
+	pending, err := database.ListPendingLimit(10)
+	if err != nil {
+		t.Fatalf("list pending: %v", err)
+	}
+	if len(pending) != 1 || !strings.HasSuffix(pending[0].AbsolutePath, "real.jpg") {
+		t.Errorf("expected 1 pending file (real.jpg), got %d", len(pending))
 	}
 }
 
@@ -125,11 +155,18 @@ func TestWrongExtensionSkipped(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
+	scanCh := m.Start(ctx)
 
-	paths := drain(ch, time.Second)
-	if len(paths) != 1 || !strings.HasSuffix(paths[0], "image.jpg") {
-		t.Errorf("expected image.jpg only, got %v", paths)
+	if !awaitScan(scanCh, time.Second) {
+		t.Fatal("timed out waiting for scan")
+	}
+
+	pending, err := database.ListPendingLimit(10)
+	if err != nil {
+		t.Fatalf("list pending: %v", err)
+	}
+	if len(pending) != 1 || !strings.HasSuffix(pending[0].AbsolutePath, "image.jpg") {
+		t.Errorf("expected 1 pending file (image.jpg), got %d", len(pending))
 	}
 }
 
@@ -146,11 +183,20 @@ func TestHiddenDirSkipped(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
+	scanCh := m.Start(ctx)
 
-	paths := drain(ch, time.Second)
-	if len(paths) != 1 || !strings.HasSuffix(paths[0], "visible.jpg") {
-		t.Errorf("expected visible.jpg only, got %v", paths)
+	if !awaitScan(scanCh, time.Second) {
+		t.Fatal("timed out waiting for scan")
+	}
+
+	_, err1 := database.GetByPath(filepath.Join(hiddenDir, "in_hidden.jpg"))
+	if err1 == nil {
+		t.Error("expected hidden dir file not in DB")
+	}
+
+	_, err2 := database.GetByPath(filepath.Join(dir, "visible.jpg"))
+	if err2 != nil {
+		t.Error("expected visible file in DB")
 	}
 }
 
@@ -178,16 +224,15 @@ func TestFailedFileModifiedRequeued(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
+	scanCh := m.Start(ctx)
 
-	paths := drain(ch, time.Second)
-	if len(paths) != 1 {
-		t.Errorf("expected modified failed file to be requeued, got %v", paths)
+	if !awaitScan(scanCh, time.Second) {
+		t.Fatal("timed out waiting for scan")
 	}
 
 	updated, _ := database.GetByPath(path)
 	if updated.Status != db.StatusPending {
-		t.Errorf("expected status pending, got %s", updated.Status)
+		t.Errorf("expected pending after modification, got %s", updated.Status)
 	}
 }
 
@@ -205,11 +250,18 @@ func TestMultipleDirectories(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
+	scanCh := m.Start(ctx)
 
-	paths := drain(ch, time.Second)
-	if len(paths) != 2 {
-		t.Errorf("expected 2 files, got %v", paths)
+	if !awaitScan(scanCh, time.Second) {
+		t.Fatal("timed out waiting for scan")
+	}
+
+	pending, err := database.ListPendingLimit(10)
+	if err != nil {
+		t.Fatalf("list pending: %v", err)
+	}
+	if len(pending) != 2 {
+		t.Errorf("expected 2 pending files, got %d", len(pending))
 	}
 }
 
@@ -222,8 +274,8 @@ func TestNonExistentDirSkipped(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_ = m.Start(ctx)
-	time.Sleep(200 * time.Millisecond)
+	scanCh := m.Start(ctx)
+	_ = awaitScan(scanCh, time.Second)
 }
 
 func TestUnchangedFailedFileNotRequeued(t *testing.T) {
@@ -244,26 +296,15 @@ func TestUnchangedFailedFileNotRequeued(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := m.Start(ctx)
+	scanCh := m.Start(ctx)
 
-	paths := drain(ch, time.Second)
-	if len(paths) != 0 {
-		t.Errorf("expected unchanged failed file not requeued, got %v", paths)
+	_ = awaitScan(scanCh, time.Second)
+
+	updated, err := database.GetByPath(path)
+	if err != nil {
+		t.Fatalf("get by path: %v", err)
 	}
-}
-
-func drain(ch <-chan string, timeout time.Duration) []string {
-	var paths []string
-	timer := time.After(timeout)
-	for {
-		select {
-		case p, ok := <-ch:
-			if !ok {
-				return paths
-			}
-			paths = append(paths, p)
-		case <-timer:
-			return paths
-		}
+	if updated.Status != db.StatusFailed {
+		t.Errorf("expected unchanged failed file to stay failed, got %s", updated.Status)
 	}
 }

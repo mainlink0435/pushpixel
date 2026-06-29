@@ -198,6 +198,28 @@ func (d *DB) ResetRetryCount(id int64) error {
 	return err
 }
 
+func (d *DB) ListPendingLimit(limit int) ([]*TrackedFile, error) {
+	rows, err := d.db.Query(`
+		SELECT id, absolute_path, file_size, mod_time, status,
+			google_media_id, error_message, retry_count, uploaded_at, last_checked_at, created_at
+		FROM tracked_files WHERE status = 'pending'
+		ORDER BY id LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var files []*TrackedFile
+	for rows.Next() {
+		f, err := d.scanFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, rows.Err()
+}
+
 func (d *DB) UpdateStatus(id int64, status Status, googleMediaID, errorMessage *string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	query := `UPDATE tracked_files SET status = ?, last_checked_at = ?`

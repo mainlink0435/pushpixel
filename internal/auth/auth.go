@@ -100,6 +100,14 @@ func (a *Auth) Exchange(ctx context.Context, code, state string) error {
 		return fmt.Errorf("exchange code: %w", err)
 	}
 
+	if token.RefreshToken == "" {
+		a.mu.Lock()
+		if a.token != nil && a.token.RefreshToken != "" {
+			token.RefreshToken = a.token.RefreshToken
+		}
+		a.mu.Unlock()
+	}
+
 	if err := a.store.Save(token); err != nil {
 		return fmt.Errorf("save token: %w", err)
 	}
