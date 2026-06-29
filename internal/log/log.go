@@ -1,7 +1,7 @@
 package log
 
 import (
-	"io"
+	"context"
 	"log/slog"
 	"os"
 
@@ -12,10 +12,48 @@ import (
 
 var currentLogger *lumberjack.Logger
 
+type fanoutHandler struct {
+	handlers []slog.Handler
+}
+
+func (h *fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, hdl := range h.handlers {
+		if hdl.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *fanoutHandler) Handle(ctx context.Context, r slog.Record) error {
+	for _, hdl := range h.handlers {
+		if hdl.Enabled(ctx, r.Level) {
+			_ = hdl.Handle(ctx, r.Clone())
+		}
+	}
+	return nil
+}
+
+func (h *fanoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	n := &fanoutHandler{}
+	for _, hdl := range h.handlers {
+		n.handlers = append(n.handlers, hdl.WithAttrs(attrs))
+	}
+	return n
+}
+
+func (h *fanoutHandler) WithGroup(name string) slog.Handler {
+	n := &fanoutHandler{}
+	for _, hdl := range h.handlers {
+		n.handlers = append(n.handlers, hdl.WithGroup(name))
+	}
+	return n
+}
+
 func Setup(cfg config.LogConfig) error {
 	level := parseLevel(cfg.Level)
 
-	var writers []io.Writer
+	var handlers []slog.Handler
 
 	if cfg.FilePath != "" {
 		currentLogger = &lumberjack.Logger{
@@ -24,27 +62,23 @@ func Setup(cfg config.LogConfig) error {
 			MaxBackups: cfg.MaxBackups,
 			MaxAge:     cfg.MaxAge,
 		}
-		writers = append(writers, currentLogger)
+		handlers = append(handlers, slog.NewJSONHandler(currentLogger, &slog.HandlerOptions{
+			Level: level,
+		}))
 	}
 
-	if os.Getenv("PUSHPIXEL_QUIET") == "" {
-		writers = append(writers, os.Stdout)
-	}
+	handlers = append(handlers, slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	}))
 
-	var writer io.Writer
-	switch len(writers) {
+	switch len(handlers) {
 	case 0:
 		return nil
 	case 1:
-		writer = writers[0]
+		slog.SetDefault(slog.New(handlers[0]))
 	default:
-		writer = io.MultiWriter(writers...)
+		slog.SetDefault(slog.New(&fanoutHandler{handlers: handlers}))
 	}
-
-	jsonHandler := slog.NewJSONHandler(writer, &slog.HandlerOptions{
-		Level: level,
-	})
-	slog.SetDefault(slog.New(jsonHandler))
 
 	return nil
 }

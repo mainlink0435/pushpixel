@@ -37,15 +37,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
+      - name: Extract version
+        id: meta
+        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
-          go build -o "pushpixel-${GOOS}-${GOARCH}${EXT}" ./cmd/pushpixel/
+          go build -ldflags "-X main.version=${VERSION}" -o "pushpixel-${GOOS}-${GOARCH}${EXT}" ./cmd/pushpixel/
       - uses: actions/upload-artifact@v4
         with:
           name: pushpixel-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -73,6 +77,8 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=v${{ steps.meta.outputs.version }}
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
             ghcr.io/${{ github.repository }}:latest

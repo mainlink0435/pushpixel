@@ -31,7 +31,7 @@ func NewFileTokenStore(dir string) (*FileTokenStore, error) {
 		return nil, fmt.Errorf("create token dir: %w", err)
 	}
 
-	key, err := machineKey()
+	key, err := machineKey(dir)
 	if err != nil {
 		return nil, fmt.Errorf("derive machine key: %w", err)
 	}
@@ -89,8 +89,8 @@ func (s *FileTokenStore) Delete() error {
 	return nil
 }
 
-func machineKey() ([]byte, error) {
-	machineID, err := readMachineID()
+func machineKey(tokenDir string) ([]byte, error) {
+	machineID, err := readMachineID(tokenDir)
 	if err != nil {
 		return nil, err
 	}

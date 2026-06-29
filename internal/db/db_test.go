@@ -7,11 +7,9 @@ import (
 	"time"
 )
 
-func setupDB(t *testing.T) *DB {
+func openTest(t *testing.T, path string) *DB {
 	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "test.db")
-	db, err := Open(path)
+	db, err := OpenTest(path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -19,10 +17,17 @@ func setupDB(t *testing.T) *DB {
 	return db
 }
 
+func setupDB(t *testing.T) *DB {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+	return openTest(t, path)
+}
+
 func TestOpen_CreatesTables(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fresh.db")
-	db, err := Open(path)
+	db, err := OpenTest(path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -196,13 +201,13 @@ func TestConcurrentOpen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "concurrent.db")
 
-	db1, err := Open(path)
+	db1, err := OpenTest(path)
 	if err != nil {
 		t.Fatalf("open db1: %v", err)
 	}
 	defer db1.Close()
 
-	db2, err := Open(path)
+	db2, err := OpenTest(path)
 	if err != nil {
 		t.Fatalf("open db2: %v", err)
 	}

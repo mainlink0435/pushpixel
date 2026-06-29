@@ -62,7 +62,7 @@ func (m *mockStatusPusher) GetStatus() webui.StatusResponse {
 func setupEngineTest(t *testing.T, batchSize int) (*Engine, *db.DB, chan string, *mockUploaderImpl, *mockStatusPusher) {
 	t.Helper()
 	dir := t.TempDir()
-	database, err := db.Open(filepath.Join(dir, "test.db"))
+	database, err := db.OpenTest(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatalf("db open: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestEngine_StatusUpdate(t *testing.T) {
 
 func TestEngine_NotAuthenticated(t *testing.T) {
 	dir := t.TempDir()
-	database, err := db.Open(filepath.Join(dir, "test.db"))
+	database, err := db.OpenTest(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatalf("db open: %v", err)
 	}

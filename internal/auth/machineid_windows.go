@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-func readMachineID() (string, error) {
+func readMachineID(_ string) (string, error) {
 	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Cryptography`, registry.READ)
 	if err != nil {
 		return "", fmt.Errorf("open registry key: %w", err)

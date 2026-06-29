@@ -36,7 +36,7 @@ won't be re-uploaded on subsequent scans.
 ## Prerequisites
 
 - A **Google Account** — for OAuth 2.0 credentials (free, see [OAuth Setup](docs/oauth-setup.md))
-- **Go 1.22+** or **Docker** — to build and run PushPixel
+- **Go 1.26+** or **Docker** — to build and run PushPixel
 - Photos and videos in folders PushPixel can access
 
 ## Quick Start (Docker)
@@ -46,21 +46,24 @@ won't be re-uploaded on subsequent scans.
    git clone https://github.com/mainlink0435/pushpixel.git
    cd pushpixel
    ```
-2. Copy the example config:
+2. Create a minimal config:
    ```
-   cp config.example.yaml config.yaml
+   mkdir data
    ```
-3. [Set up OAuth credentials](docs/oauth-setup.md) and paste your client ID and secret into `config.yaml`
+   Create `data/config.yaml` with just your OAuth credentials:
+   ```yaml
+   auth:
+     client_id: "your-client-id"
+     client_secret: "your-client-secret"
+   ```
+   Everything else defaults automatically for Docker (directories, DB path, logs, tokens).
+3. [Set up OAuth credentials](docs/oauth-setup.md) and fill in the values above
 4. Edit `docker-compose.yml` — change `/path/to/photos:/photos:ro` to point to your media directory
-5. Update `config.yaml` so `directories` points to the container path (e.g. `/photos`)
 6. Start the container:
    ```
    docker compose up -d
    ```
 7. Open `http://localhost:1978` — click **Connect to Google Photos**
-
-> **Tip:** To use the pre-built image instead of building locally, replace `build: .`
-> with `image: ghcr.io/mainlink0435/pushpixel:latest` in `docker-compose.yml`.
 
 ## Quick Start (Without Docker)
 
@@ -95,15 +98,34 @@ See `config.example.yaml` for every option with comments.
 
 ## Docker Compose Reference
 
-The `docker-compose.yml` defines three mounts:
+The included `docker-compose.yml`:
 
-| Mount | Purpose |
-|-------|---------|
-| `./config.yaml:/app/config.yaml:ro` | Config file (read-only) |
-| `pushpixel_data:/app` | Persistent volume for the database and encrypted OAuth token |
-| `/path/to/photos:/photos:ro` | Your media directory (read-only — edit this path) |
+```yaml
+services:
+  pushpixel:
+    image: ghcr.io/mainlink0435/pushpixel:latest
+    container_name: pushpixel
+    restart: unless-stopped
+    ports:
+      - "1978:1978"
+    volumes:
+      - ./data:/app/data    # config, db, logs, tokens
+      - /path/to/photos:/photos:ro
+    environment:
+      - PUSHPIXEL_DOCKER=1
+```
 
-The `PUSHPIXEL_QUIET=1` environment variable disables stdout logging (JSON still goes to file).
+All runtime files live in `./data/` on your host:
+
+| File | Purpose |
+|------|---------|
+| `data/config.yaml` | Config with OAuth credentials and directories |
+| `data/pushpixel.db` | SQLite database tracking upload state |
+| `data/token.enc` | Encrypted OAuth refresh token |
+| `data/pushpixel.log` | Structured JSON logs with rotation |
+
+The `PUSHPIXEL_DOCKER=1` environment variable tells PushPixel to use Docker-safe default
+paths (`/app/data/` for DB, logs, and tokens; `/photos` for monitored directories).
 
 ## Web Dashboard
 

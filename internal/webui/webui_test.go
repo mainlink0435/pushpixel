@@ -27,7 +27,7 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("NewAuth: %v", err)
 	}
 
-	database, err := db.Open(filepath.Join(dir, "webui-test.db"))
+	database, err := db.OpenTest(filepath.Join(dir, "webui-test.db"))
 	if err != nil {
 		t.Fatalf("db open: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestFailedFiles_WithData(t *testing.T) {
 	s := newTestServer(t)
 
 	dir := t.TempDir()
-	dbase, err := db.Open(filepath.Join(dir, "test-failed.db"))
+	dbase, err := db.OpenTest(filepath.Join(dir, "test-failed.db"))
 	if err != nil {
 		t.Fatalf("db open: %v", err)
 	}

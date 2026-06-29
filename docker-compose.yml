@@ -1,16 +1,12 @@
 services:
   pushpixel:
-    build: .
+    image: ghcr.io/mainlink0435/pushpixel:latest
     container_name: pushpixel
     restart: unless-stopped
     ports:
       - "1978:1978"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - pushpixel_data:/app
+      - ./data:/app/data
       - /path/to/photos:/photos:ro
     environment:
-      - PUSHPIXEL_QUIET=1
-
-volumes:
-  pushpixel_data:
+      - PUSHPIXEL_DOCKER=1

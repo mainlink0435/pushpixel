@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/mainLink0435/pushpixel/internal/sync"
 	"github.com/mainLink0435/pushpixel/internal/webui"
 )
+
+var version = "dev"
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to configuration file")
@@ -34,7 +37,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("starting pushpixel",
+	slog.Info("pushpixel starting",
+		"version", version,
+		"go", runtime.Version(),
 		"directories", cfg.Directories,
 		"db", cfg.DBPath,
 	)

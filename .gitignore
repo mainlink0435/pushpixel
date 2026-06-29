@@ -11,6 +11,9 @@
 token.enc
 *.log
 
+# Docker data folder (config, db, logs, tokens)
+/data/
+
 # Config with secrets
 /config.yaml
 

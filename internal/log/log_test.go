@@ -61,7 +61,7 @@ func TestSetup_FileOutput(t *testing.T) {
 		MaxAge:     1,
 	}
 
-	t.Setenv("PUSHPIXEL_QUIET", "1")
+
 
 	if err := Setup(cfg); err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -108,7 +108,7 @@ func TestSetup_LevelFiltering(t *testing.T) {
 		MaxAge:     1,
 	}
 
-	t.Setenv("PUSHPIXEL_QUIET", "1")
+
 
 	if err := Setup(cfg); err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -138,10 +138,8 @@ func TestSetup_LevelFiltering(t *testing.T) {
 	}
 }
 
-func TestSetup_QuietAndNoFile(t *testing.T) {
+func TestSetup_NoFile(t *testing.T) {
 	defer saveSlogHandler()()
-
-	t.Setenv("PUSHPIXEL_QUIET", "1")
 
 	cfg := config.LogConfig{
 		Level:      "info",
@@ -190,7 +188,7 @@ func TestSetup_InvalidLevelDefaults(t *testing.T) {
 		MaxAge:     1,
 	}
 
-	t.Setenv("PUSHPIXEL_QUIET", "1")
+
 
 	if err := Setup(cfg); err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -223,7 +221,7 @@ func TestSetup_InvalidLevelDefaults(t *testing.T) {
 func TestSetup_ConcurrentChanges(t *testing.T) {
 	defer saveSlogHandler()()
 
-	t.Setenv("PUSHPIXEL_QUIET", "1")
+
 
 	for i := 0; i < 10; i++ {
 		dir, err := os.MkdirTemp("", "log_test")

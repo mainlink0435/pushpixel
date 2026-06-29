@@ -5,12 +5,14 @@ import (
 )
 
 func TestMachineKey_Deterministic(t *testing.T) {
-	k1, err := machineKey()
+	dir := t.TempDir()
+
+	k1, err := machineKey(dir)
 	if err != nil {
 		t.Fatalf("first key: %v", err)
 	}
 
-	k2, err := machineKey()
+	k2, err := machineKey(dir)
 	if err != nil {
 		t.Fatalf("second key: %v", err)
 	}
@@ -28,7 +30,9 @@ func TestMachineKey_Deterministic(t *testing.T) {
 }
 
 func TestMachineKey_NotEmpty(t *testing.T) {
-	key, err := machineKey()
+	dir := t.TempDir()
+
+	key, err := machineKey(dir)
 	if err != nil {
 		t.Fatalf("machine key: %v", err)
 	}

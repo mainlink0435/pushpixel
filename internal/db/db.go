@@ -51,6 +51,21 @@ func Open(path string) (*DB, error) {
 	return db, nil
 }
 
+func OpenTest(path string) (*DB, error) {
+	dsn := "file:" + filepath.ToSlash(path) + "?_pragma=busy_timeout(5000)"
+	d, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open db: %w", err)
+	}
+
+	db := &DB{db: d}
+	if err := db.migrate(); err != nil {
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+
+	return db, nil
+}
+
 func (d *DB) Close() error {
 	return d.db.Close()
 }

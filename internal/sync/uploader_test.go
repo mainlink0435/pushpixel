@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -289,12 +290,13 @@ func TestUploadFile_EmptyFile(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	result, err := uploader.UploadFile(context.Background(), path)
-	if err != nil {
-		t.Fatalf("UploadFile: %v", err)
+	_, err := uploader.UploadFile(context.Background(), path)
+	if err == nil {
+		t.Fatal("expected error for empty file")
 	}
-	if result.Token == "" {
-		t.Fatal("expected token even for empty file")
+	var perr PermanentError
+	if !errors.As(err, &perr) {
+		t.Fatalf("expected PermanentError for empty file, got %T: %v", err, err)
 	}
 }
 

@@ -61,9 +61,24 @@ type AuthConfig struct {
 }
 
 func defaults() *Config {
+	dbPath := "pushpixel.db"
+	logPath := "pushpixel.log"
+	tokenDir := "."
+	dirs := []string{}
+	webPort := 8080
+
+	if os.Getenv("PUSHPIXEL_DOCKER") == "1" {
+		dbPath = "/app/data/pushpixel.db"
+		logPath = "/app/data/pushpixel.log"
+		tokenDir = "/app/data/"
+		dirs = []string{"/photos"}
+		webPort = 1978
+	}
+
 	return &Config{
+		Directories:    dirs,
 		FileExtensions: []string{".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov"},
-		DBPath:         "pushpixel.db",
+		DBPath:         dbPath,
 		Polling: PollingConfig{
 			Interval: 5 * time.Minute,
 		},
@@ -82,17 +97,17 @@ func defaults() *Config {
 		},
 		Logging: LogConfig{
 			Level:      "info",
-			FilePath:   "pushpixel.log",
+			FilePath:   logPath,
 			MaxSize:    10,
 			MaxBackups: 3,
 			MaxAge:     30,
 		},
 		WebUI: WebUIConfig{
 			Host: "127.0.0.1",
-			Port: 8080,
+			Port: webPort,
 		},
 		Auth: AuthConfig{
-			TokenDir: ".",
+			TokenDir: tokenDir,
 		},
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-func readMachineID() (string, error) {
+func readMachineID(_ string) (string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return "", fmt.Errorf("hostname: %w", err)

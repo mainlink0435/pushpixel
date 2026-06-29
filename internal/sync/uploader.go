@@ -66,6 +66,10 @@ func (u *mediaUploader) UploadFile(ctx context.Context, path string) (*UploadTok
 		return nil, fmt.Errorf("stat file: %w", err)
 	}
 
+	if info.Size() == 0 {
+		return nil, PermanentError{Message: "file is empty (0 bytes)"}
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)

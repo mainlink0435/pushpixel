@@ -141,6 +141,11 @@ func (e *Engine) handleFile(ctx context.Context, path string) error {
 		return nil
 	}
 
+	if dbErr == nil && existing.Status == db.StatusUploading {
+		slog.Debug("file already in pipeline, skipping", "path", path)
+		return nil
+	}
+
 	e.dbMu.Lock()
 	record, err := e.database.UpsertFile(path, info.Size(), info.ModTime())
 	e.dbMu.Unlock()
