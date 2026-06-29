@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/mainLink0435/pushpixel/internal/auth"
@@ -38,7 +39,11 @@ func New(a *auth.Auth, cfg config.WebUIConfig, database *db.DB) *Server {
 		mux:      http.NewServeMux(),
 	}
 
-	a.SetRedirectURL(fmt.Sprintf("http://%s:%d/oauth/callback", cfg.Host, cfg.Port))
+	redirectHost := cfg.Host
+	if os.Getenv("PUSHPIXEL_DOCKER") == "1" {
+		redirectHost = "localhost"
+	}
+	a.SetRedirectURL(fmt.Sprintf("http://%s:%d/oauth/callback", redirectHost, cfg.Port))
 
 	s.mux.HandleFunc("/", s.handleDashboard)
 	s.mux.HandleFunc("/oauth/authorize", s.handleOAuthAuthorize)
