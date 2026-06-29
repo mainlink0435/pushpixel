@@ -95,5 +95,6 @@ func main() {
 	slog.Info("shutting down", "signal", sig)
 
 	cancel()
+	log.Close()
 	time.Sleep(500 * time.Millisecond)
 }

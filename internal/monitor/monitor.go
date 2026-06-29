@@ -81,7 +81,7 @@ func (m *Monitor) walkDir(dir string, ch chan<- string) {
 		}
 
 		if d.IsDir() {
-			if isHiddenDir(d.Name()) {
+			if isHidden(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -115,7 +115,7 @@ func (m *Monitor) walkDir(dir string, ch chan<- string) {
 				ch <- path
 			}
 
-			case db.StatusPending, db.StatusUploading:
+		case db.StatusPending, db.StatusUploading:
 			ch <- path
 
 		default:
@@ -146,10 +146,6 @@ func (m *Monitor) shouldSkip(d os.DirEntry) bool {
 }
 
 func isHidden(name string) bool {
-	return strings.HasPrefix(name, ".")
-}
-
-func isHiddenDir(name string) bool {
 	return strings.HasPrefix(name, ".")
 }
 

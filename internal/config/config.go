@@ -65,6 +65,7 @@ func defaults() *Config {
 	logPath := "pushpixel.log"
 	tokenDir := "."
 	dirs := []string{}
+	webHost := "127.0.0.1"
 	webPort := 8080
 
 	if os.Getenv("PUSHPIXEL_DOCKER") == "1" {
@@ -72,6 +73,7 @@ func defaults() *Config {
 		logPath = "/app/data/pushpixel.log"
 		tokenDir = "/app/data/"
 		dirs = []string{"/photos"}
+		webHost = "0.0.0.0"
 		webPort = 1978
 	}
 
@@ -103,7 +105,7 @@ func defaults() *Config {
 			MaxAge:     30,
 		},
 		WebUI: WebUIConfig{
-			Host: "127.0.0.1",
+			Host: webHost,
 			Port: webPort,
 		},
 		Auth: AuthConfig{

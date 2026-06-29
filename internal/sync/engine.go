@@ -124,7 +124,9 @@ func (e *Engine) handleFile(ctx context.Context, path string) error {
 		return err
 	}
 
+	e.dbMu.Lock()
 	existing, dbErr := e.database.GetByPath(path)
+	e.dbMu.Unlock()
 	if dbErr == nil && existing.Status == db.StatusSuccess &&
 		existing.FileSize == info.Size() && sameTime(existing.ModTime, info.ModTime()) {
 		slog.Debug("already uploaded, skipping", "path", path)
@@ -244,6 +246,8 @@ func (e *Engine) createWorker(ctx context.Context, wg *sync.WaitGroup) {
 			if errStr == "storage full" || errStr == "rate limited" {
 				e.paused.Store(true)
 				slog.Warn("storage full or rate limited, pausing uploads")
+				batch = batch[:0]
+				pendingJobs = pendingJobs[:0]
 				return
 			}
 
@@ -349,19 +353,23 @@ func (e *Engine) pushStatus() {
 }
 
 func (e *Engine) storageFullChecker(ctx context.Context) {
-	ticker := time.NewTicker(e.storageCheckInt)
-	defer ticker.Stop()
-
 	for {
+		if !e.paused.Load() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(e.storageCheckInt):
+			}
+			continue
+		}
+
+		slog.Info("storage full, auto-resuming after backoff", "backoff", e.cfg.StorageFull.Backoff)
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			if e.paused.Load() {
-				slog.Info("storage full auto-resume check")
-				e.paused.Store(false)
-				slog.Info("auto-resumed after storage full backoff")
-			}
+		case <-time.After(e.cfg.StorageFull.Backoff):
+			e.paused.Store(false)
+			slog.Info("auto-resumed after storage full backoff")
 		}
 	}
 }
