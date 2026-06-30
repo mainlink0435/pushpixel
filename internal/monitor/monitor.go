@@ -130,6 +130,10 @@ func (m *Monitor) walkDir(dir string) int {
 			}
 
 		case db.StatusPending, db.StatusUploading:
+			if existing.Status == db.StatusUploading && time.Since(existing.LastCheckedAt) > 10*time.Minute {
+				_ = m.database.UpdateStatus(existing.ID, db.StatusPending, nil, nil)
+				count++
+			}
 			return nil
 
 		default:
