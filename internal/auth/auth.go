@@ -122,11 +122,36 @@ func (a *Auth) Exchange(ctx context.Context, code, state string) error {
 }
 
 func (a *Auth) TokenSource(ctx context.Context) oauth2.TokenSource {
-	a.mu.Lock()
-	tok := a.token
-	a.mu.Unlock()
+	return oauth2.ReuseTokenSource(nil, &dynamicTokenSource{auth: a})
+}
 
-	return a.config.TokenSource(ctx, tok)
+type dynamicTokenSource struct {
+	auth *Auth
+}
+
+func (s *dynamicTokenSource) Token() (*oauth2.Token, error) {
+	s.auth.mu.Lock()
+	tok := s.auth.token
+	s.auth.mu.Unlock()
+
+	if tok == nil {
+		return nil, fmt.Errorf("not authenticated")
+	}
+
+	src := s.auth.config.TokenSource(context.Background(), tok)
+	t, err := src.Token()
+	if err != nil {
+		return nil, err
+	}
+
+	if t.AccessToken != tok.AccessToken {
+		s.auth.mu.Lock()
+		s.auth.token = t
+		s.auth.mu.Unlock()
+		_ = s.auth.store.Save(t)
+	}
+
+	return t, nil
 }
 
 func (a *Auth) HTTPClient(ctx context.Context) *http.Client {
