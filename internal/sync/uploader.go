@@ -84,7 +84,7 @@ func (u *mediaUploader) UploadFile(ctx context.Context, path string) (*UploadTok
 	if fileSize >= resumableThreshold {
 		token, err = u.uploadResumable(ctx, file, fileSize, mimeType)
 	} else {
-		token, err = u.uploadRaw(ctx, file, mimeType)
+		token, err = u.uploadRaw(ctx, file, mimeType, fileSize)
 	}
 
 	if err != nil {
@@ -98,17 +98,13 @@ func (u *mediaUploader) UploadFile(ctx context.Context, path string) (*UploadTok
 	}, nil
 }
 
-func (u *mediaUploader) uploadRaw(ctx context.Context, file *os.File, mimeType string) (string, error) {
-	body, err := io.ReadAll(file)
-	if err != nil {
-		return "", fmt.Errorf("read file: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, bytes.NewReader(body))
+func (u *mediaUploader) uploadRaw(ctx context.Context, file *os.File, mimeType string, fileSize int64) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, file)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 
+	req.ContentLength = fileSize
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("X-Goog-Upload-Content-Type", mimeType)
 	req.Header.Set("X-Goog-Upload-Protocol", "raw")
@@ -185,17 +181,16 @@ func (u *mediaUploader) startResumableSession(ctx context.Context, fileSize int6
 }
 
 func (u *mediaUploader) finalizeResumable(ctx context.Context, sessionURL string, file *os.File, fileSize int64, mimeType string) (string, error) {
-	body, err := io.ReadAll(file)
-	if err != nil {
-		return "", fmt.Errorf("read file: %w", err)
+	if _, err := file.Seek(0, 0); err != nil {
+		return "", fmt.Errorf("seek file: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sessionURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sessionURL, file)
 	if err != nil {
 		return "", fmt.Errorf("create upload request: %w", err)
 	}
 
-	req.Header.Set("Content-Length", fmt.Sprintf("%d", fileSize))
+	req.ContentLength = fileSize
 	req.Header.Set("X-Goog-Upload-Protocol", "resumable")
 	req.Header.Set("X-Goog-Upload-Command", "upload, finalize")
 	req.Header.Set("X-Goog-Upload-Offset", "0")
