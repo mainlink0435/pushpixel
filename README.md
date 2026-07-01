@@ -97,7 +97,7 @@ All settings live in `config.yaml`. The key ones:
 | `retry.max_attempts` | `5` | Auto-retries before marking as permanently failed |
 | `upload.max_concurrent` | `2` | Maximum parallel byte uploads |
 | `upload.batch_size` | `50` | Items per batch creation call (max 50, API limit) |
-| `webui.port` | `8080` | Dashboard port |
+| `webui.port` | `1978` (Docker) / `8080` (local) | Dashboard port |
 | `auth.client_id` | *(required)* | Google OAuth client ID |
 | `auth.client_secret` | *(required)* | Google OAuth client secret |
 
