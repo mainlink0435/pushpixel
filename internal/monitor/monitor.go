@@ -58,11 +58,15 @@ func (m *Monitor) loop(ctx context.Context, ch chan<- struct{}) {
 
 func (m *Monitor) scan(ch chan<- struct{}) {
 	slog.Info("scan started")
+	scanStart := time.Now()
 
 	var count int
 	for _, dir := range m.dirs {
 		count += m.walkDir(dir)
 	}
+
+	purged, _ := m.database.PurgeUnseenFiles(scanStart)
+	count += purged
 
 	total, _ := m.database.TotalCount()
 	slog.Info("scan complete", "files_found", count, "total_tracked", total)

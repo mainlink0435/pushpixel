@@ -220,6 +220,18 @@ func (d *DB) ListPendingLimit(limit int) ([]*TrackedFile, error) {
 	return files, rows.Err()
 }
 
+func (d *DB) PurgeUnseenFiles(before time.Time) (int, error) {
+	result, err := d.db.Exec(`
+		DELETE FROM tracked_files
+		WHERE last_checked_at < ? AND status IN ('pending', 'success')
+	`, before.UTC().Format(time.RFC3339))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	return int(n), nil
+}
+
 func (d *DB) UpdateStatus(id int64, status Status, googleMediaID, errorMessage *string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	query := `UPDATE tracked_files SET status = ?, last_checked_at = ?`
