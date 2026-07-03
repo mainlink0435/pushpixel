@@ -220,6 +220,12 @@ func (d *DB) ListPendingLimit(limit int) ([]*TrackedFile, error) {
 	return files, rows.Err()
 }
 
+func (d *DB) UpdateLastChecked(id int64) error {
+	_, err := d.db.Exec(`UPDATE tracked_files SET last_checked_at = ? WHERE id = ?`,
+		time.Now().UTC().Format(time.RFC3339), id)
+	return err
+}
+
 func (d *DB) PurgeUnseenFiles(before time.Time) (int, error) {
 	result, err := d.db.Exec(`
 		DELETE FROM tracked_files

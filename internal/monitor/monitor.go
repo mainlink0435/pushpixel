@@ -117,6 +117,8 @@ func (m *Monitor) walkDir(dir string) int {
 			return nil
 		}
 
+		_ = m.database.UpdateLastChecked(existing.ID)
+
 		switch existing.Status {
 		case db.StatusSuccess:
 			if existing.FileSize == fileInfo.Size() && sameTime(existing.ModTime, fileInfo.ModTime()) {
