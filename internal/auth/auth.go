@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
 	"golang.org/x/oauth2"
@@ -14,6 +16,8 @@ import (
 
 	"github.com/mainLink0435/pushpixel/internal/config"
 )
+
+var ErrTokenExpired = errors.New("oauth token expired or revoked")
 
 type Auth struct {
 	config *oauth2.Config
@@ -141,6 +145,14 @@ func (s *dynamicTokenSource) Token() (*oauth2.Token, error) {
 	src := s.auth.config.TokenSource(context.Background(), tok)
 	t, err := src.Token()
 	if err != nil {
+		if isTokenExpired(err) {
+			s.auth.mu.Lock()
+			s.auth.token = nil
+			s.auth.mu.Unlock()
+			_ = s.auth.store.Delete()
+			slog.Warn("oauth token expired or revoked — cleared token, re-authentication required")
+			return nil, fmt.Errorf("%w: %w", ErrTokenExpired, err)
+		}
 		return nil, err
 	}
 
@@ -156,6 +168,12 @@ func (s *dynamicTokenSource) Token() (*oauth2.Token, error) {
 
 func (a *Auth) HTTPClient(ctx context.Context) *http.Client {
 	return oauth2.NewClient(ctx, a.TokenSource(ctx))
+}
+
+func isTokenExpired(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "invalid_grant") ||
+		strings.Contains(msg, "token has been expired or revoked")
 }
 
 func randomState() (string, error) {

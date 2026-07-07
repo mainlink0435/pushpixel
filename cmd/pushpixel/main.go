@@ -81,7 +81,7 @@ func main() {
 		}
 	}()
 
-	go feedFiles(ctx, database, fileCh, scanCh)
+	go feedFiles(ctx, database, fileCh, scanCh, a.IsAuthenticated)
 
 	if a.IsAuthenticated() {
 		slog.Info("authenticated with Google Photos")
@@ -103,8 +103,19 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 }
 
-func feedFiles(ctx context.Context, database *db.DB, fileCh chan<- string, scanCh <-chan struct{}) {
+func feedFiles(ctx context.Context, database *db.DB, fileCh chan<- string, scanCh <-chan struct{}, authed func() bool) {
 	for {
+		if !authed() {
+			slog.Debug("feed: not authenticated, sleeping")
+			select {
+			case <-ctx.Done():
+				close(fileCh)
+				return
+			case <-time.After(30 * time.Second):
+			}
+			continue
+		}
+
 		pending, err := database.ListPendingLimit(100)
 		if err != nil {
 			slog.Error("feed pending files", "error", err)

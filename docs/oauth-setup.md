@@ -17,15 +17,23 @@ These steps are done once per user.
 
 ## 3. Register your app
 
-1. Go to **https://console.developers.google.com/auth/audience** (Auth Platform → Audience)
+1. Go to **https://console.cloud.google.com/auth/audience** (Auth Platform → Audience)
 2. If prompted, select your PushPixel project
 3. User Type: **External** → **Create**
 4. Fill in required fields (app name, emails) → **Save and Continue**
-5. Under **Test users** → **+ Add Users** → enter your Gmail → **Save**
+5. **Publish your app** so refresh tokens don't expire in 7 days:
 
-Without step 5, Google will show an "unverified app" error and you won't be able to sign in.
+   Scroll to the **Publishing status** section at the bottom of the page → click **PUBLISH APP** → confirm.
 
-> Test user authorizations expire after 7 days. Once your app goes through verification, this restriction is removed.
+   > This does **not** require full app verification. The Photos Library API scopes show a
+   > one-time "unverified app" warning to users, but tokens are long-lived in "In production"
+   > mode. In "Testing" mode, Google issues refresh tokens that expire after 7 days.
+
+6. **Add yourself as a test user** (required while the app is unverified):
+
+   Under **Test users** → **+ Add Users** → enter your Gmail → **Save**.
+
+   Without this step, Google shows an "unverified app" error and you can't sign in.
 
 ## 4. Set up branding
 
@@ -58,8 +66,8 @@ auth:
 
 | Symptom | Fix |
 |---------|-----|
-| "unverified app" at sign-in | Add your email as a test user under Auth Platform → Audience |
+| "unverified app" at sign-in | Make sure you added your email as a test user under Auth Platform → Audience |
 | "access_denied" | Check you enabled the Google Photos Library API |
-| "token not found" after restart | The `token.enc` file stores your session — keep it safe |
-| Test user session expires every 7 days | Re-authenticate, or go through app verification |
+| "token not found" after restart | The token file stores your session — keep it safe |
+| Token expires after 7 days | Your app is still in "Testing" mode. Go to **Auth Platform → Audience**, scroll to **Publishing status**, and click **PUBLISH APP**. Then delete your token file and reconnect. |
 | Redirect went to `localhost` on a remote server | PushPixel uses Desktop OAuth for simplicity, which only auto-approves localhost. Replace `localhost:1978` in the URL bar with your server's hostname — keep `/oauth/callback?...` and all query parameters unchanged. |

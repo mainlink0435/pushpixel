@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mainLink0435/pushpixel/internal/auth"
 	"github.com/mainLink0435/pushpixel/internal/config"
 	"github.com/mainLink0435/pushpixel/internal/db"
 	"github.com/mainLink0435/pushpixel/internal/webui"
@@ -200,18 +201,25 @@ func (e *Engine) uploadWorker(ctx context.Context, wg *sync.WaitGroup) {
 
 			token, err := e.uploader.UploadFile(ctx, job.Path)
 			if err != nil {
-				var perr PermanentError
-				if errors.As(err, &perr) {
-					slog.Error("byte upload permanently failed", "path", job.Path, "error", err)
+				if errors.Is(err, auth.ErrTokenExpired) {
+					slog.Warn("oauth token expired — cleared, re-auth needed. File will be retried after re-auth", "path", job.Path)
 					e.dbMu.Lock()
-					_ = e.database.UpdateStatus(job.DBFileID, db.StatusFailed, nil, strPtr(err.Error()))
-					e.dbMu.Unlock()
-				} else {
-					slog.Warn("byte upload transient error, will retry", "path", job.Path, "error", err)
-					e.dbMu.Lock()
-					_ = e.database.IncrementRetryCount(job.DBFileID)
 					_ = e.database.UpdateStatus(job.DBFileID, db.StatusPending, nil, nil)
 					e.dbMu.Unlock()
+				} else {
+					var perr PermanentError
+					if errors.As(err, &perr) {
+						slog.Error("byte upload permanently failed", "path", job.Path, "error", err)
+						e.dbMu.Lock()
+						_ = e.database.UpdateStatus(job.DBFileID, db.StatusFailed, nil, strPtr(err.Error()))
+						e.dbMu.Unlock()
+					} else {
+						slog.Warn("byte upload transient error, will retry", "path", job.Path, "error", err)
+						e.dbMu.Lock()
+						_ = e.database.IncrementRetryCount(job.DBFileID)
+						_ = e.database.UpdateStatus(job.DBFileID, db.StatusPending, nil, nil)
+						e.dbMu.Unlock()
+					}
 				}
 				continue
 			}
@@ -246,6 +254,18 @@ func (e *Engine) createWorker(ctx context.Context, wg *sync.WaitGroup) {
 		results, err := e.uploader.BatchCreate(ctx, batch)
 		if err != nil {
 			errStr := err.Error()
+
+			if errors.Is(err, auth.ErrTokenExpired) {
+				slog.Warn("oauth token expired — cleared, re-auth needed", "error", err)
+				e.dbMu.Lock()
+				for _, job := range pendingJobs {
+					_ = e.database.UpdateStatus(job.DBFileID, db.StatusPending, nil, nil)
+				}
+				e.dbMu.Unlock()
+				batch = batch[:0]
+				pendingJobs = pendingJobs[:0]
+				return
+			}
 
 			if errStr == "storage full" || errStr == "rate limited" {
 				e.paused.Store(true)
