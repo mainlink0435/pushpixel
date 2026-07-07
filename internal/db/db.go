@@ -220,6 +220,15 @@ func (d *DB) ListPendingLimit(limit int) ([]*TrackedFile, error) {
 	return files, rows.Err()
 }
 
+func (d *DB) ResetUploading() (int, error) {
+	result, err := d.db.Exec(`UPDATE tracked_files SET status = 'pending', retry_count = 0 WHERE status = 'uploading'`)
+	if err != nil {
+		return 0, fmt.Errorf("reset uploading: %w", err)
+	}
+	n, _ := result.RowsAffected()
+	return int(n), nil
+}
+
 func (d *DB) UpdateLastChecked(id int64) error {
 	_, err := d.db.Exec(`UPDATE tracked_files SET last_checked_at = ? WHERE id = ?`,
 		time.Now().UTC().Format(time.RFC3339), id)

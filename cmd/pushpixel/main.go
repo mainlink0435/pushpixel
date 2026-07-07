@@ -51,6 +51,12 @@ func main() {
 	}
 	defer database.Close()
 
+	if n, err := database.ResetUploading(); err != nil {
+		slog.Warn("reset stale uploading files", "error", err)
+	} else if n > 0 {
+		slog.Info("reset stale uploading files to pending", "count", n)
+	}
+
 	a, err := auth.NewAuth(cfg.Auth)
 	if err != nil {
 		slog.Error("auth init", "error", err)
