@@ -94,8 +94,18 @@ jobs:
         with:
           pattern: pushpixel-*
           merge-multiple: true
+      - name: Generate release notes
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            printf '**Changes since %s:**\n\n' "$PREV_TAG" > /tmp/release-notes.md
+            git log --oneline --no-merges "${PREV_TAG}..HEAD" >> /tmp/release-notes.md
+          else
+            printf '**First release**\n\n' > /tmp/release-notes.md
+            git log --oneline --no-merges HEAD >> /tmp/release-notes.md
+          fi
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: pushpixel-*
-          generate_release_notes: true
+          body_path: /tmp/release-notes.md
