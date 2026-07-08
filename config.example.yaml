@@ -35,6 +35,9 @@ auth:
 # upload:
 #   max_concurrent: 2
 #   batch_size: 50
+#   timeout:
+#     base_seconds: 300         # minimum timeout per file (5 min)
+#     min_throughput_kbps: 1024 # larger files get proportionally more time (1 Mbps)
 # storage_full:
 #   backoff: 4h
 # logging:

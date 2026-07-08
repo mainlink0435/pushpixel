@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mainLink0435/pushpixel/internal/config"
 )
@@ -49,15 +50,31 @@ type BatchResult struct {
 }
 
 type mediaUploader struct {
-	client   *http.Client
-	maxBatch int
+	client     *http.Client
+	maxBatch   int
+	timeoutCfg config.UploadTimeout
 }
 
 func NewUploader(client *http.Client, cfg config.UploadConfig) Uploader {
 	return &mediaUploader{
-		client:   client,
-		maxBatch: cfg.BatchSize,
+		client:     client,
+		maxBatch:   cfg.BatchSize,
+		timeoutCfg: cfg.Timeout,
 	}
+}
+
+func (u *mediaUploader) uploadTimeout(fileSize int64) time.Duration {
+	kbps := u.timeoutCfg.MinThroughputKbps
+	if kbps <= 0 {
+		kbps = 1024
+	}
+	base := u.timeoutCfg.BaseSeconds
+	if base <= 0 {
+		base = 300
+	}
+	bytesPerSec := (int64(kbps) * 1024) / 8
+	sec := base + int(fileSize/bytesPerSec)
+	return time.Duration(sec) * time.Second
 }
 
 func (u *mediaUploader) UploadFile(ctx context.Context, path string) (*UploadToken, error) {
@@ -99,7 +116,11 @@ func (u *mediaUploader) UploadFile(ctx context.Context, path string) (*UploadTok
 }
 
 func (u *mediaUploader) uploadRaw(ctx context.Context, file *os.File, mimeType string, fileSize int64) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, file)
+	timeout := u.uploadTimeout(fileSize)
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, uploadURL, file)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
@@ -185,7 +206,11 @@ func (u *mediaUploader) finalizeResumable(ctx context.Context, sessionURL string
 		return "", fmt.Errorf("seek file: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sessionURL, file)
+	timeout := u.uploadTimeout(fileSize)
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, sessionURL, file)
 	if err != nil {
 		return "", fmt.Errorf("create upload request: %w", err)
 	}

@@ -33,8 +33,14 @@ type RetryConfig struct {
 }
 
 type UploadConfig struct {
-	MaxConcurrent int `yaml:"max_concurrent"`
-	BatchSize     int `yaml:"batch_size"`
+	MaxConcurrent int           `yaml:"max_concurrent"`
+	BatchSize     int           `yaml:"batch_size"`
+	Timeout       UploadTimeout `yaml:"timeout"`
+}
+
+type UploadTimeout struct {
+	BaseSeconds       int `yaml:"base_seconds"`
+	MinThroughputKbps int `yaml:"min_throughput_kbps"`
 }
 
 type StorageConfig struct {
@@ -93,6 +99,10 @@ func defaults() *Config {
 		Upload: UploadConfig{
 			MaxConcurrent: 2,
 			BatchSize:     50,
+			Timeout: UploadTimeout{
+				BaseSeconds:       300,
+				MinThroughputKbps: 1024,
+			},
 		},
 		StorageFull: StorageConfig{
 			Backoff: 4 * time.Hour,
@@ -175,6 +185,12 @@ func (c *Config) validate() error {
 	}
 	if c.Upload.BatchSize <= 0 || c.Upload.BatchSize > 50 {
 		return fmt.Errorf("upload.batch_size must be between 1 and 50")
+	}
+	if c.Upload.Timeout.BaseSeconds <= 0 {
+		return fmt.Errorf("upload.timeout.base_seconds must be positive")
+	}
+	if c.Upload.Timeout.MinThroughputKbps <= 0 {
+		return fmt.Errorf("upload.timeout.min_throughput_kbps must be positive")
 	}
 
 	if c.StorageFull.Backoff <= 0 {
