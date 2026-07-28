@@ -61,9 +61,13 @@ func (m *Monitor) scan(ch chan<- struct{}) {
 	scanStart := time.Now()
 
 	var count int
+	var seenIDs []int64
 	for _, dir := range m.dirs {
-		count += m.walkDir(dir)
+		dirCount, dirIDs := m.walkDir(dir)
+		count += dirCount
+		seenIDs = append(seenIDs, dirIDs...)
 	}
+	_ = m.database.BulkUpdateLastChecked(seenIDs)
 
 	purged, _ := m.database.PurgeUnseenFiles(scanStart)
 	count += purged
@@ -77,18 +81,19 @@ func (m *Monitor) scan(ch chan<- struct{}) {
 	}
 }
 
-func (m *Monitor) walkDir(dir string) int {
+func (m *Monitor) walkDir(dir string) (int, []int64) {
 	info, err := os.Stat(dir)
 	if err != nil {
 		slog.Warn("monitor directory unavailable", "dir", dir, "error", err)
-		return 0
+		return 0, nil
 	}
 	if !info.IsDir() {
 		slog.Warn("monitor path is not a directory", "dir", dir)
-		return 0
+		return 0, nil
 	}
 
 	var count int
+	var seenIDs []int64
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -112,12 +117,13 @@ func (m *Monitor) walkDir(dir string) int {
 
 		existing, err := m.database.GetByPath(path)
 		if err != nil {
-			_, _ = m.database.UpsertFile(path, fileInfo.Size(), fileInfo.ModTime())
+			record, _ := m.database.UpsertFile(path, fileInfo.Size(), fileInfo.ModTime())
+			seenIDs = append(seenIDs, record.ID)
 			count++
 			return nil
 		}
 
-		_ = m.database.UpdateLastChecked(existing.ID)
+		seenIDs = append(seenIDs, existing.ID)
 
 		switch existing.Status {
 		case db.StatusSuccess:
@@ -147,7 +153,7 @@ func (m *Monitor) walkDir(dir string) int {
 
 		return nil
 	})
-	return count
+	return count, seenIDs
 }
 
 func (m *Monitor) shouldSkip(d os.DirEntry) bool {

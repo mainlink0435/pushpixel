@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -233,6 +234,37 @@ func (d *DB) UpdateLastChecked(id int64) error {
 	_, err := d.db.Exec(`UPDATE tracked_files SET last_checked_at = ? WHERE id = ?`,
 		time.Now().UTC().Format(time.RFC3339), id)
 	return err
+}
+
+func (d *DB) BulkUpdateLastChecked(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	const batchSize = 500
+	for i := 0; i < len(ids); i += batchSize {
+		end := i + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch := ids[i:end]
+
+		query := "UPDATE tracked_files SET last_checked_at = ? WHERE id IN (" +
+			strings.Repeat("?,", len(batch)-1) + "?)"
+
+		args := make([]interface{}, len(batch)+1)
+		args[0] = now
+		for j, id := range batch {
+			args[j+1] = id
+		}
+
+		if _, err := d.db.Exec(query, args...); err != nil {
+			return fmt.Errorf("bulk update last_checked: %w", err)
+		}
+	}
+	return nil
 }
 
 func (d *DB) PurgeUnseenFiles(before time.Time) (int, error) {
