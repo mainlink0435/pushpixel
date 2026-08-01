@@ -218,6 +218,51 @@ func TestEngine_BatchCreatePermanentFailure(t *testing.T) {
 	}
 }
 
+func TestEngine_BatchCreateReorderedResults(t *testing.T) {
+	e, database, fileCh, mockUp, _ := setupEngineTest(t, 10)
+	dir := t.TempDir()
+
+	// Return results in the REVERSE order of the tokens sent, as Google's API
+	// docs say the results are "not guaranteed to be in the same order".
+	mockUp.uploadFunc = func(ctx context.Context, path string) (*UploadToken, error) {
+		return &UploadToken{Token: "tok-" + filepath.Base(path), Path: path, Name: filepath.Base(path)}, nil
+	}
+	mockUp.batchFunc = func(ctx context.Context, tokens []*UploadToken) ([]BatchResult, error) {
+		var results []BatchResult
+		for i := len(tokens) - 1; i >= 0; i-- {
+			results = append(results, BatchResult{
+				Token:       tokens[i].Token,
+				Status:      "success",
+				MediaItemID: "media-" + tokens[i].Token,
+			})
+		}
+		return results, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go e.Run(ctx, fileCh)
+
+	paths := []string{}
+	for i := 0; i < 3; i++ {
+		p := filepath.Join(dir, fmt.Sprintf("photo_%d.jpg", i))
+		if err := os.WriteFile(p, []byte(fmt.Sprintf("data-%d", i)), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		paths = append(paths, p)
+		fileCh <- p
+	}
+
+	for _, path := range paths {
+		record := awaitStatus(t, database, path, db.StatusSuccess)
+		want := "media-tok-" + filepath.Base(path)
+		if record.GoogleMediaID == nil || *record.GoogleMediaID != want {
+			t.Errorf("path %s: got media_id %v, want %s", path, record.GoogleMediaID, want)
+		}
+	}
+}
+
 func TestEngine_StorageFullPause(t *testing.T) {
 	e, _, fileCh, mockUp, _ := setupEngineTest(t, 1)
 	dir := t.TempDir()

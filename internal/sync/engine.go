@@ -299,9 +299,20 @@ func (e *Engine) createWorker(ctx context.Context, wg *sync.WaitGroup) {
 			return
 		}
 
+		// Google returns batch results in an arbitrary order, so match each
+		// result back to its job by upload token rather than by array index.
+		jobByToken := make(map[string]uploadJob, len(batch))
+		for i, token := range batch {
+			jobByToken[token.Token] = pendingJobs[i]
+		}
+
 		e.dbMu.Lock()
-		for i, result := range results {
-			job := pendingJobs[i]
+		for _, result := range results {
+			job, ok := jobByToken[result.Token]
+			if !ok {
+				slog.Warn("batch result token not found in batch", "token", result.Token)
+				continue
+			}
 			if result.Status == "success" {
 				_ = e.database.UpdateStatus(job.DBFileID, db.StatusSuccess, &result.MediaItemID, nil)
 				slog.Info("upload success", "path", job.Path, "media_id", result.MediaItemID)
@@ -309,6 +320,12 @@ func (e *Engine) createWorker(ctx context.Context, wg *sync.WaitGroup) {
 				_ = e.database.UpdateStatus(job.DBFileID, db.StatusFailed, nil, &result.Error)
 				slog.Warn("upload failed", "path", job.Path, "error", result.Error)
 			}
+			delete(jobByToken, result.Token)
+		}
+		// Any token that received no result was not created — reset it to
+		// pending so it is retried on the next cycle.
+		for _, job := range jobByToken {
+			_ = e.database.UpdateStatus(job.DBFileID, db.StatusPending, nil, nil)
 		}
 		e.dbMu.Unlock()
 
